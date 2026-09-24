@@ -19,20 +19,25 @@ from drivers.protocol_constants import (
 
 
 async def _find_ble_device():
-    """Find SENTRY-BLE by advertised name."""
-    devices = await BleakScanner.discover(
-        timeout=BLE_SCAN_TIMEOUT_SECONDS,
-    )
+    """Find SENTRY-BLE using the advertised/local name."""
+    devices = await BleakScanner.discover(timeout=BLE_SCAN_TIMEOUT_SECONDS)
+    expected_name = BLE_DEVICE_NAME.casefold()
+
     for device in devices:
-        if device.name == BLE_DEVICE_NAME:
+        names = {
+            (device.name or "").casefold(),
+            (getattr(device, "local_name", "") or "").casefold(),
+        }
+        if expected_name in names:
             return device
+
     return None
 
 
 @pytest.mark.ble
 @pytest.mark.asyncio
 async def test_ble_led_dual_channel(ble_uart_device):
-    """Write LED over BLE and verify both LED transitions over UART."""
+    """Write LED over BLE and verify both transitions over UART."""
     ble_device = await _find_ble_device()
     assert ble_device is not None, (
         f"BLE device {BLE_DEVICE_NAME!r} was not found by scanner."
@@ -53,9 +58,10 @@ async def test_ble_led_dual_channel(ble_uart_device):
             b"\x01",
             response=True,
         )
-        assert ble_uart_device.wait_for_pattern(
+        assert await asyncio.to_thread(
+            ble_uart_device.wait_for_pattern,
             BLE_LED_ON_MARKER,
-            timeout=BLE_UART_PATTERN_TIMEOUT_SECONDS,
+            BLE_UART_PATTERN_TIMEOUT_SECONDS,
         ), (
             "BLE write 0x01 completed, but UART did not report LED ON!. "
             f"UART response: {ble_uart_device.last_response}"
@@ -67,9 +73,10 @@ async def test_ble_led_dual_channel(ble_uart_device):
             b"\x00",
             response=True,
         )
-        assert ble_uart_device.wait_for_pattern(
+        assert await asyncio.to_thread(
+            ble_uart_device.wait_for_pattern,
             BLE_LED_OFF_MARKER,
-            timeout=BLE_UART_PATTERN_TIMEOUT_SECONDS,
+            BLE_UART_PATTERN_TIMEOUT_SECONDS,
         ), (
             "BLE write 0x00 completed, but UART did not report LED OFF!. "
             f"UART response: {ble_uart_device.last_response}"
@@ -77,3 +84,5 @@ async def test_ble_led_dual_channel(ble_uart_device):
     finally:
         if client.is_connected:
             await client.disconnect()
+
+    assert not client.is_connected, "Bleak client remained connected after teardown"

@@ -8,10 +8,7 @@ def test_scan_finds_networks(device, wifi_config):
     """The DUT can scan for Wi-Fi networks and finds the configured SSID."""
     networks = device.wifi_scan()
 
-    assert any(
-        network["ssid"] == wifi_config.ssid
-        for network in networks
-    ), (
+    assert any(network["ssid"] == wifi_config.ssid for network in networks), (
         f"SSID {wifi_config.ssid!r} not found in scan results: {networks}. "
         f"Raw UART response: {device.last_response}"
     )
@@ -44,7 +41,14 @@ def test_connect_success(device, wifi_config):
     )
 
 
-@pytest.mark.xfail(reason="Expected error implemented for testing")
+@pytest.mark.wifi
+@pytest.mark.xfail(
+    reason=(
+        "BUG-001: after disconnect, status reports "
+        "WiFi: connected with empty SSID and IP 0.0.0.0"
+    ),
+    strict=True,
+)
 def test_disconnect(device, wifi_config):
     """The DUT can disconnect from the Wi-Fi network."""
     assert device.wifi_connect(

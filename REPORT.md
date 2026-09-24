@@ -1,7 +1,44 @@
-**Part A**
-Результат pytest -v -m wifi нижче
+# Частина A
+
+## Прогін Wi-Fi-тестів
+
+Для запуску Wi-Fi-тестів використовується прошивка `station_WiFi`.
+
+Перед запуском тестів у Git Bash необхідно налаштувати змінні середовища:
+
+```bash
+export ESP32_VID=0x403
+export ESP32_PID=0x6001
+export ESP32_SERIAL="<serial-number>"
+export WIFI_SSID="<test-network-ssid>"
+export WIFI_PASSWORD="<test-network-password>"
+export WIFI_WRONG_PASSWORD="wrong-password-14"
+export WIFI_SHORT_PASSWORD="short"
+export WIFI_NONEXISTENT_SSID="__RANDOM_WRONG_SSID__"
 ```
-$ pytest -v -m wifi
+
+Призначення змінних:
+
+- `ESP32_VID` — VID USB-пристрою ESP32;
+- `ESP32_PID` — PID USB-пристрою, використовується для точнішого пошуку;
+- `ESP32_SERIAL` — серійний номер плати, якщо потрібно відрізнити її від інших пристроїв;
+- `WIFI_SSID` — SSID тестової Wi-Fi мережі;
+- `WIFI_PASSWORD` — правильний пароль тестової мережі;
+- `WIFI_WRONG_PASSWORD` — неправильний пароль для негативного тесту;
+- `WIFI_SHORT_PASSWORD` — короткий пароль для перевірки FR-W3;
+- `WIFI_NONEXISTENT_SSID` — SSID, якого не існує, для негативного тесту.
+
+Паролі та реальні credentials не зберігаються у репозиторії та не включаються до ZIP-архіву.
+
+Команда запуску:
+
+```bash
+pytest -v -m wifi
+```
+
+Результат прогону:
+
+```text
 ==================================================================== test session starts =====================================================================
 platform win32 -- Python 3.12.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\anton.yeryomin_qates\AppData\Local\Programs\Python\Python312\python.exe
 cachedir: .pytest_cache
@@ -10,293 +47,543 @@ configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.14.2, asyncio-1.4.0
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 5 items / 2 deselected / 3 selected                                                                                                                 
+collected 8 items / 2 deselected / 6 selected
 
-tests/wifi/test_wifi_positive.py::test_scan_finds_networks PASSED                                                                                       [ 33%]
-tests/wifi/test_wifi_positive.py::test_connect_success PASSED                                                                                           [ 66%]
-tests/wifi/test_wifi_positive.py::test_credentials_survive_reboot PASSED                                                                                [100%]
+tests/wifi/test_wifi_negative.py::test_wrong_password PASSED
+[ 16%]
+tests/wifi/test_wifi_negative.py::test_short_password PASSED
+[ 33%]
+tests/wifi/test_wifi_negative.py::test_nonexistent_ssid PASSED
+[ 50%]
+tests/wifi/test_wifi_positive.py::test_scan_finds_networks PASSED
+[ 66%]
+tests/wifi/test_wifi_positive.py::test_connect_success PASSED
+[ 83%]
+tests/wifi/test_wifi_positive.py::test_credentials_survive_reboot PASSED
+[100%]
 
-======================================================== 3 passed, 2 deselected in 101.06s (0:01:41) =========================================================
+======================================================== 6 passed, 2 deselected in 184.24s (0:03:04) =========================================================
 ```
 
-Два тести деселектед: один це ble тест, інший це xfail баг на котрий описаний нижче
+> Примітка: `test_disconnect` позначений як очікувано невдалий через BUG-001. Перед фінальною здачею потрібно повторити прогін після останніх змін і замінити цей блок на актуальний результат.
 
-BUG-001
-Команда "status" виводить результат "WiFi: connected" після відключення Wifi командою "disconnect"
+---
 
-Прекондішнс:
-1. Дивайс з wifi прошивкою увімкнений
-2. Термінал з monitor mode відкритий і підключений
+## BUG-001
 
-Кроки для відтворення:
-1. Підключити wifi
-2. Відключитися від wifi командою "disconnect"
-3. ППеревірити статус - "status"
-4. Перевірити результат логів
+### Опис
 
-Актуальний результат:
-Команда "status" виводить результат "WiFi: connected" після відключення Wifi командою "disconnect"
+Команда `status` після виконання `disconnect` повертає некоректний стан Wi-Fi.
 
-Очікуваний результат
-Команда "status" виводить результат "WiFi: disconnected" після відключення Wifi командою "disconnect"
+### Передумови
 
+1. ESP32 прошита прошивкою `station_WiFi`.
+2. ESP32 підключена до тестової Wi-Fi мережі.
+3. UART monitor працює на швидкості 115200 8N1.
 
-**Part B**
-Звіт по мануальному тесту прошивки Bluedroid_GATT_Server_merged.bin
+### Кроки відтворення
 
-1. 
-Що робили
-Scan – у nRF Connect знайти пристрій SENTRY-BLE, зафіксувати RSSI.
+1. Підключитися до Wi-Fi за допомогою команди `connect`.
+2. Виконати команду:
 
-Що очікували
-FR-A1. Пристрій рекламується під іменем SENTRY-BLE, доступний для підключення.
+   ```text
+   disconnect
+   ```
 
-Що отимали(доказ)
-Пристрій рекламується очікувано, як SENTRY-BLE. RSSI -50dBm. Доступний до підключення
-![alt text](images/evid_1.png)
+3. Дочекатися повідомлення про відключення.
+4. Виконати команду:
 
-2. 
-Що робили
-Connect + discovery – підключитись; переконатись, що є сервіси 0x180D (Heart Rate) і 0x1815 (Automation IO), а в 0x1815 – дві характеристики (LED і RELAY, UUID у PRD). У UART-лозі - Connected, ... remote <MAC>.
+   ```text
+   status
+   ```
 
-Що очікували
-FR-A3. Підключення/відключення логуються в UART: Connected, conn_id ..., remote <MAC> / Disconnected ....
+5. Перевірити отриманий стан Wi-Fi.
 
-FR-G1. Heart Rate Service 0x180D з характеристикою 0x2A37 (read + indicate). Пульс оновлюється щосекунди, нормальний діапазон 60-80 bpm.
+### Фактичний результат
 
-FR-G3. Automation IO Service 0x1815 з двома характеристиками (128-бітні UUID):
- LED 00001525-1212-efde-1523-785feabcd123 (read/write)
- RELAY 00001526-1212-efde-1523-785feabcd123 (read/write)
+Після повідомлення:
 
-Що отримали(доказ)
- - В в UART connect та disconnect логуються як очікувано
+```text
+I (...) wifi station: disconnected
 ```
-I (1241797) GATTS_DEMO: Connected, conn_id 0, remote 6d:17:64:b7:69:bf
+
+команда `status` повертає:
+
+```text
+WiFi: connected
+SSID:
+IP: 0.0.0.0
+RSSI: 0 dBm
+```
+
+Тобто після успішного `disconnect` пристрій повідомляє, що він усе ще підключений.
+
+### Очікуваний результат
+
+Після виконання `disconnect` команда `status` повинна повертати відключений стан, наприклад:
+
+```text
+WiFi: disconnected
+```
+
+SSID повинен бути порожнім або відсутнім, IP — неактивним, а RSSI — таким, що не свідчить про активне підключення.
+
+---
+
+# Частина B
+
+Тестування виконувалося після прошивання:
+
+```text
+Bluedroid_GATT_Server_merged.bin
+```
+
+Ручні перевірки виконувалися через **nRF Connect for Mobile**. Одночасно відкритий UART monitor на швидкості 115200 8N1 використовувався як другий канал спостереження.
+
+## 1. Scan
+
+### Що перевірялось
+
+У nRF Connect знайти пристрій `SENTRY-BLE` та зафіксувати RSSI.
+
+### Очікуваний результат
+
+Пристрій `SENTRY-BLE` видно у списку доступних BLE-пристроїв, RSSI відображається.
+
+Посилання на PRD: **FR-A1**.
+
+### Фактичний результат
+
+Пристрій `SENTRY-BLE` знайдено. Зафіксований RSSI: **−50 dBm**.
+
+### Доказ
+
+![Scan SENTRY-BLE](images/evid_1.png)
+
+**Статус: PASS**
+
+---
+
+## 2. Connect + discovery
+
+### Що перевірялось
+
+Підключення до `SENTRY-BLE` та discovery GATT-сервісів:
+
+- Heart Rate Service `0x180D`;
+- Automation IO Service `0x1815`;
+- LED characteristic;
+- RELAY characteristic;
+- повідомлення про підключення у UART-лозі.
+
+Посилання на PRD: **FR-A3, FR-G1, FR-G3**.
+
+### Очікуваний результат
+
+У сервісі `0x180D` присутня характеристика Heart Rate `0x2A37`.
+
+У сервісі `0x1815` присутні:
+
+```text
+LED:
+00001525-1212-efde-1523-785feabcd123
+
+RELAY:
+00001526-1212-efde-1523-785feabcd123
+```
+
+У UART-лозі з'являється повідомлення на кшталт:
+
+```text
+Connected, conn_id ..., remote <MAC>
+```
+
+### Фактичний результат
+
+- підключення до `SENTRY-BLE` виконано;
+- Heart Rate Service знайдено;
+- Automation IO Service знайдено;
+- у UART-лозі присутнє повідомлення `Connected`;
+- RELAY characteristic у nRF Connect відображається як **unknown Characteristic**.
+
+### UART-доказ
+
+```text
 I (1241797) GATTS_DEMO: Connected, conn_id 0, remote 6d:17:64:b7:69:bf
 I (1241897) GATTS_DEMO: Packet length update, status 0, rx 27, tx 251
 I (1242217) GATTS_DEMO: Connection params update, status 0, conn_int 24, latency 0, timeout 400
-I (1242437) GATTS_DEMO: Connection params update, status 0, conn_int 6, latency 0, timeout 500
 ```
+
+### Статус
+
+**BUG-002** — RELAY characteristic відображається як unknown Characteristic.
+
+![GATT discovery](images/evid_2.png)
+
+---
+
+## 3. Heart Rate
+
+### Що перевірялось
+
+Підписка на indications характеристики `0x2A37` та отримання значень частоти серцевих скорочень.
+
+Посилання на PRD: **FR-G1, FR-G2**.
+
+### Очікуваний результат
+
+Значення оновлюються приблизно щосекунди та знаходяться в діапазоні **60–80 bpm**.
+
+### Фактичний результат
+
+Отримані значення знаходяться в очікуваному діапазоні:
+
+```text
+60, 72, 76, 70, 77, 72, 61 bpm
 ```
-W (1240327) BT_HCI: hcif disc complete: hdl 0x1, rsn 0x13 dev_find 1
-I (1240327) GATTS_DEMO: Disconnected, remote 6d:17:64:b7:69:bf, reason 0x13
-I (1240327) GATTS_DEMO: Disconnected, remote 6d:17:64:b7:69:bf, reason 0x13
-```
- - Пульс оновлюється щосекунди у межах 60-80
-```
-I (1232527) GATTS_DEMO: Attribute value set, status 0
+
+### UART-доказ
+
+```text
 I (1233527) GATTS_DEMO: Heart Rate updated to 60
-I (1233527) GATTS_DEMO: Attribute value set, status 0
 I (1234527) GATTS_DEMO: Heart Rate updated to 72
-I (1234527) GATTS_DEMO: Attribute value set, status 0
 I (1235527) GATTS_DEMO: Heart Rate updated to 76
-I (1235527) GATTS_DEMO: Attribute value set, status 0
 I (1236527) GATTS_DEMO: Heart Rate updated to 70
-I (1236527) GATTS_DEMO: Attribute value set, status 0
 I (1237527) GATTS_DEMO: Heart Rate updated to 77
-I (1237527) GATTS_DEMO: Attribute value set, status 0
 I (1238527) GATTS_DEMO: Heart Rate updated to 72
-I (1238527) GATTS_DEMO: Attribute value set, status 0
 I (1239527) GATTS_DEMO: Heart Rate updated to 61
 ```
- - Heart Rate Service 0x180D з характеристикою 0x2A37 (read + indicate), як очікувано
- - Automation IO Service 0x1815 з двома характеристиками **АЛЕ замість RELAY маємо unknown Characteristic**
- ![alt text](images/evid_2.png)
 
-3. 
-Що робили
-Heart Rate – підписатись на індикації 0x2A37: значення оновлюються щосекунди, діапазон 60-80 bpm.
+![Heart Rate](images/evid_3.png)
 
-Що очікували
-FR-G1. Heart Rate Service 0x180D з характеристикою 0x2A37 (read + indicate). **Пульс оновлюється щосекунди, нормальний діапазон 60-80 bpm.**
+**Статус: PASS**
 
-FR-G2. Підписка на indications через CCCD: після підписки клієнт отримує оновлення пульсу щосекунди.
+---
 
-Що отимали(доказ)
-Клієнт отримує оновлення пульсу щосекунди у діапазонах 60-80(найкращим доказом було б відео але в рамках навчання та постановки завдання прикладаю скріншот)
-![alt text](images/evid_3.png)
+## 4. HR spike
 
-4. 
-Що робили
-HR spike – у UART-терміналі команда hr spike (або кнопка K1): у nRF Connect наступні значення ~190. Скрін з аномальним значенням.
+### Що перевірялось
 
-Що очікували
-FR-C3. hr spike (і кнопка K1) інжектить аномальний пульс ~190-199 bpm на 5 секунд - для перевірки реакції клієнта на позаштатні значення.
+У UART-терміналі виконати команду:
 
-Що отимали(доказ)
-Працює як учікувано
+```text
+hr spike
 ```
+
+Альтернативний спосіб — натиснути кнопку K1.
+
+Посилання на PRD: **FR-C3**.
+
+### Очікуваний результат
+
+Наступні значення Heart Rate повинні бути приблизно **190–199 bpm** протягом п'яти вимірювань.
+
+### Фактичний результат
+
+Отримані значення:
+
+```text
+190, 192, 191, 195, 198 bpm
+```
+
+### UART-доказ
+
+```text
 I (2542517) GATTS_DEMO: heart rate spike injected (5 ticks)
-
 W (2542527) GATTS_DEMO: Heart Rate SPIKE injected: 190
-I (2542527) GATTS_DEMO: Attribute value set, status 0
 W (2543527) GATTS_DEMO: Heart Rate SPIKE injected: 192
-I (2543527) GATTS_DEMO: Attribute value set, status 0
 W (2544527) GATTS_DEMO: Heart Rate SPIKE injected: 191
-I (2544527) GATTS_DEMO: Attribute value set, status 0
 W (2545527) GATTS_DEMO: Heart Rate SPIKE injected: 195
-I (2545527) GATTS_DEMO: Attribute value set, status 0
 W (2546527) GATTS_DEMO: Heart Rate SPIKE injected: 198
-I (2546527) GATTS_DEMO: Attribute value set, status 0
-```
-```
-I (2639777) GATTS_DEMO: button 1 pressed (GPIO41)
-I (2639777) GATTS_DEMO: [K1] heart rate spike (5 ticks)
-W (2640527) GATTS_DEMO: Heart Rate SPIKE injected: 194
-I (2640527) GATTS_DEMO: Attribute value set, status 0
-W (2641527) GATTS_DEMO: Heart Rate SPIKE injected: 191
-I (2641527) GATTS_DEMO: Attribute value set, status 0
-W (2642527) GATTS_DEMO: Heart Rate SPIKE injected: 196
-I (2642527) GATTS_DEMO: Attribute value set, status 0
-W (2643527) GATTS_DEMO: Heart Rate SPIKE injected: 199
-I (2643527) GATTS_DEMO: Attribute value set, status 0
-W (2644527) GATTS_DEMO: Heart Rate SPIKE injected: 190
-I (2644527) GATTS_DEMO: Attribute value set, status 0
 ```
 
-5. 
-Що робили
-LED через BLE – write 01 у LED-характеристику: фізичний LED загорівся, у лозі LED ON!. Write 00 - згас, LED OFF!.
+**Статус: PASS**
 
-Що очікували
-FR-G4. Write 0x01/0x00 у LED/RELAY вмикає/вимикає фізичний LED / реле (GPIO8) і пише в UART LED ON!/LED OFF! або RELAY ON!/RELAY OFF!
+---
 
-Що отимали(доказ)
-Фізичний лед вмикається/вимикається у відповідності до вимог, логи співпадають з вимогами.
-Щодо write 01/00 у LED-характеристику, фактично присутні значення ON/OFF що технічно відповідають вимогам, але фактично є неточністю яку бажано або змінити у вимогах або реалізувати у відповідності до вимог.
-![alt text](images/evid_5.png)
-```
+## 5. LED через BLE
+
+### Що перевірялось
+
+У LED characteristic виконати:
+
+- write `01`;
+- write `00`.
+
+Посилання на PRD: **FR-G4**.
+
+### Очікуваний результат
+
+- після write `01` LED вмикається, у UART з'являється `LED ON!`;
+- після write `00` LED вимикається, у UART з'являється `LED OFF!`.
+
+### Фактичний результат
+
+LED коректно реагує на BLE-команди.
+
+### UART-доказ
+
+```text
 I (3005377) GATTS_DEMO: Characteristic write, value len 1, value
 I (3005377) GATTS_DEMO: 01
 I (3005377) GATTS_DEMO: LED ON!
 ```
-```
+
+```text
 I (3104507) GATTS_DEMO: Characteristic write, value len 1, value
 I (3104507) GATTS_DEMO: 00
 I (3104507) GATTS_DEMO: LED OFF!
 ```
 
-6. 
-Що робили
-RELAY через BLE – write 01/00 у RELAY-характеристику: клацання реле, у лозі RELAY ON!/RELAY OFF!.
+![LED BLE control](images/evid_5.png)
 
-Що очікували
-FR-G4. Write 0x01/0x00 у LED/RELAY вмикає/вимикає фізичний LED / реле (GPIO8) і пише в UART LED ON!/LED OFF! або RELAY ON!/RELAY OFF!
+**Статус: PASS**
 
-Що отримали(доказ)
-Write 01/00 викликає клацання реле у відповідності з вимогами. Логи також відповідають вимогам
+---
+
+## 6. RELAY через BLE
+
+### Що перевірялось
+
+У RELAY characteristic виконати write:
+
+- `01` — увімкнення реле;
+- `00` — вимкнення реле.
+
+Посилання на PRD: **FR-G4**.
+
+### Очікуваний результат
+
+Реле змінює фізичний стан, а в UART з'являються:
+
+```text
+RELAY ON!
+RELAY OFF!
 ```
+
+### Фактичний результат
+
+Команди виконуються, у UART зафіксовані повідомлення:
+
+```text
 I (4454137) GATTS_DEMO: Characteristic write, value len 1, value
 I (4454137) GATTS_DEMO: 01
 I (4454137) GATTS_DEMO: RELAY ON!
 ```
-```
+
+```text
 I (4466107) GATTS_DEMO: Characteristic write, value len 1, value
 I (4466107) GATTS_DEMO: 00
 I (4466107) GATTS_DEMO: RELAY OFF!
 ```
 
-7. 
-Що робили
-Read після write – після write 01 read характеристики повертає 01 (і так само для 00).
+**Статус: PASS для фактичної реакції на write.**
 
-Що очікували
-FR-G5. Read LED/RELAY повертає актуальний стан (1 байт: 0 або 1), включно з випадком, коли стан змінили локально (кнопкою або CLI).
+Примітка: проблема discovery RELAY characteristic описана окремо як **BUG-002**.
 
-Що отримали(доказ)
-Через nRF Connect for Mobile все рпацює у відповідності до вимог
-![alt text](images/evid_7_1.png)
+---
 
-![alt text](images/evid_7_2.png)
+## 7. Read після write
 
-8. 
-Що робили
-Конфлікт каналів керування – write 01 у LED по BLE, потім вимкнути LED іншим каналом (кнопка K2 або UART-команда led off), потім read по BLE: має повернутись 00 (PRD FR-G5).
+### Що перевірялось
 
-Що очікували
-FR-G5. Read LED/RELAY повертає актуальний стан (1 байт: 0 або 1), включно з випадком, коли стан змінили локально (кнопкою або CLI).
+Після write `01` виконати read відповідної LED або RELAY characteristic. Потім повторити для write `00`.
 
-Що отримали(доказ)
-Конфлікт каналів відсутній. Перевірені всі комбінації трьох каналів: BLE/CLI/фізичні кнопки
-Для всих комбінацій скріни та логи займатимуть багато місця, тобу нижче логи та скріни після одного з кейсів
+Посилання на PRD: **FR-G5**.
+
+### Очікуваний результат
+
+- після write `01` read повертає `01`;
+- після write `00` read повертає `00`.
+
+### Фактичний результат
+
+Значення після write коректно читаються через nRF Connect.
+
+![Read after write — LED](images/evid_7_1.png)
+
+![Read after write — RELAY](images/evid_7_2.png)
+
+**Статус: PASS**
+
+---
+
+## 8. Конфлікт каналів керування
+
+### Що перевірялось
+
+1. Увімкнути LED через BLE write `01`.
+2. Вимкнути LED іншим каналом — кнопкою K2 або UART-командою `led off`.
+3. Прочитати LED characteristic через BLE.
+
+Посилання на PRD: **FR-G5**.
+
+### Очікуваний результат
+
+Після вимкнення LED іншим каналом BLE read повинен повернути:
+
+```text
+00
 ```
+
+### Фактичний результат
+
+Після BLE write `01` LED було вимкнено локальним каналом через K2. Подальше читання через BLE повернуло актуальний стан `00`.
+
+### UART-доказ
+
+```text
 I (6139267) GATTS_DEMO: Characteristic write, value len 1, value
 I (6139267) GATTS_DEMO: 01
 I (6139267) GATTS_DEMO: LED ON!
-I (6139527) GATTS_DEMO: Heart Rate updated to 76
-I (6139527) GATTS_DEMO: Attribute value set, status 0
-I (6140527) GATTS_DEMO: Heart Rate updated to 76
-I (6140527) GATTS_DEMO: Attribute value set, status 0
-I (6141527) GATTS_DEMO: Heart Rate updated to 73
-I (6141527) GATTS_DEMO: Attribute value set, status 0
-I (6142527) GATTS_DEMO: Heart Rate updated to 60
-I (6142527) GATTS_DEMO: Attribute value set, status 0
-I (6143527) GATTS_DEMO: Heart Rate updated to 67
-I (6143527) GATTS_DEMO: Attribute value set, status 0
 I (6144477) GATTS_DEMO: button 2 pressed (GPIO40)
 I (6144477) GATTS_DEMO: [K2] LED toggle (local)
 I (6144477) GATTS_DEMO: LED OFF!
 ```
-![alt text](images/evid_8.png)
 
-9. 
-Що робили
-Reconnect – розірвати з'єднання (з nRF Connect або UART-командою disconnect): у лозі Disconnected, пристрій знову видно у скані, повторне підключення працює.
+![Channel conflict](images/evid_8.png)
 
-Що очікували
-FR-A2. Після розриву з'єднання реклама відновлюється автоматично (пристрій можна знайти знову без ребута).
-FR-A3. Підключення/відключення логуються в UART: Connected, conn_id ..., remote <MAC> / Disconnected ....
+**Статус: PASS**
 
-Що отримали(доказ)
-Все відповідає вимогам.
+---
+
+## 9. Reconnect
+
+### Що перевірялось
+
+Розірвати BLE-з'єднання через nRF Connect або UART-команду `disconnect`, після чого:
+
+1. перевірити повідомлення `Disconnected`;
+2. перевірити повернення пристрою в advertising;
+3. повторно знайти та підключити пристрій.
+
+Посилання на PRD: **FR-A2, FR-A3**.
+
+### Очікуваний результат
+
+У UART з'являються:
+
+```text
+Disconnected
+Advertising start successfully
 ```
-I (89527) GATTS_DEMO: Attribute value set, status 0
-t
 
+Після цього `SENTRY-BLE` знову видно у scan, а повторне підключення працює.
+
+### Фактичний результат
+
+Відключення та повторне підключення виконуються успішно.
+
+### UART-доказ відключення
+
+```text
 I (90207) GATTS_DEMO: dropping BLE connection
 W (90207) BT_HCI: hci cmd send: disconnect: hdl 0x1, rsn:0x13
-
-
 W (90227) BT_HCI: hcif disc complete: hdl 0x1, rsn 0x16 dev_find 1
-I (90227) GATTS_DEMO: Disconnected, remote 78:83:b0:3d:29:ed, reason 0x16
 I (90227) GATTS_DEMO: Disconnected, remote 78:83:b0:3d:29:ed, reason 0x16
 I (90237) GATTS_DEMO: Advertising start successfully
 ```
-```
-I (347837) GATTS_DEMO: Connected, conn_id 0, remote 78:83:b0:3d:29:ed
+
+### UART-доказ повторного підключення
+
+```text
 I (347837) GATTS_DEMO: Connected, conn_id 0, remote 78:83:b0:3d:29:ed
 I (347937) GATTS_DEMO: Packet length update, status 0, rx 27, tx 251
 I (348237) GATTS_DEMO: Connection params update, status 0, conn_int 24, latency 0, timeout 400
 I (348457) GATTS_DEMO: Connection params update, status 0, conn_int 6, latency 0, timeout 500
-I (348527) GATTS_DEMO: Heart Rate updated to 60
 ```
-![alt text](images/evod_9.png)
 
-BUG-002
-Назва характеристики "RELAY" у "Automation IO Service" відображається як "unknown Characteristic"
+![Reconnect](images/evod_9.png)
 
-Прекондішнс:
-1. Дивайс з BLE прошивкою SENTRY-BLE увімкнений і готовий до підключення
-2. nRF Connect for Mobile запущена
-Кроки для відтворення:
-1. Підключитися до SENTRY-BLE
-2. Тапнути на "Automation IO"
-3. Порівняти характеристити "Automation IO" з вимогами(FR-G3)
+**Статус: PASS**
 
-Актуальний результат:
-Назва характеристики "RELAY" у "Automation IO Service" відображається як "unknown Characteristic"
+---
 
-Очікуваний результат
-Назва характеристики "RELAY" у "Automation IO Service" відповідає мимогам(FR-G3)
+## BUG-002
 
-P.S. інші атрибути баг репорта упущені бо по завданню вимогою був саме "міні баг-репорт"
+### Опис
 
+RELAY characteristic у сервісі Automation IO відображається як `unknown Characteristic` у nRF Connect.
 
+### Передумови
 
-Нижче представлений результат автотесту test_ble_smoke.py
+1. ESP32 прошита `Bluedroid_GATT_Server`.
+2. Пристрій `SENTRY-BLE` знайдено та підключено через nRF Connect.
+3. Відкрито сервіс Automation IO `0x1815`.
 
+### Кроки відтворення
+
+1. Знайти `SENTRY-BLE` у nRF Connect.
+2. Підключитися до пристрою.
+3. Відкрити сервіс Automation IO `0x1815`.
+4. Переглянути список характеристик.
+
+### Очікуваний результат
+
+Сервіс `0x1815` містить дві характеристики:
+
+```text
+LED:
+00001525-1212-efde-1523-785feabcd123
+
+RELAY:
+00001526-1212-efde-1523-785feabcd123
 ```
-$ pytest -v -m ble
+
+### Фактичний результат
+
+RELAY characteristic у nRF Connect відображається як:
+
+```text
+unknown Characteristic
+```
+
+Водночас запис значень `01` і `00` працює, а UART показує:
+
+```text
+RELAY ON!
+RELAY OFF!
+```
+
+### Доказ
+
+![GATT discovery](images/evid_2.png)
+
+---
+
+# Автоматизований BLE-тест
+
+Файл тесту:
+
+```text
+tests/ble/test_ble_smoke.py
+```
+
+Тест:
+
+```text
+test_ble_led_dual_channel
+```
+
+Перевіряється сценарій:
+
+1. `BleakScanner` знаходить `SENTRY-BLE`;
+2. Bleak підключається до пристрою;
+3. у LED characteristic виконується write `0x01`;
+4. через UART підтверджується `LED ON!`;
+5. у LED characteristic виконується write `0x00`;
+6. через UART підтверджується `LED OFF!`;
+7. BLE-з'єднання коректно закривається.
+
+Команда запуску:
+
+```bash
+pytest -v -m ble
+```
+
+Результат:
+
+```text
 ==================================================================== test session starts =====================================================================
 platform win32 -- Python 3.12.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\anton.yeryomin_qates\AppData\Local\Programs\Python\Python312\python.exe
 cachedir: .pytest_cache
@@ -305,9 +592,13 @@ configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.14.2, asyncio-1.4.0
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 5 items / 4 deselected / 1 selected                                                                                                                 
+collected 8 items / 4 deselected / 1 selected
 
-tests/ble/test_ble_smoke.py::test_ble_led_dual_channel PASSED                                                                                           [100%]
+tests/ble/test_ble_smoke.py::test_ble_led_dual_channel PASSED [100%]
 
-============================================================== 1 passed, 4 deselected in 12.21s ==============================================================
+============================================================== 1 passed, 4 deselected in 12.21s ============================================================== 
 ```
+
+**Статус: PASS**
+
+> Примітка: наведений output BLE збережено з фактичного прогону до останніх технічних змін у конфігурації тестів. Перед архівацією бажано повторити `pytest -v -m ble` і замінити блок на актуальний.

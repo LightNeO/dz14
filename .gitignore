@@ -29,6 +29,9 @@ reports/
 uart_*.txt
 ble_*.txt
 
+# Local agent/tooling worktrees
+.kilo/
+
 # IDE and OS files
 .vscode/
 .idea/

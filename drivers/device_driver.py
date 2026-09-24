@@ -15,6 +15,7 @@ from drivers.protocol_constants import (
     BOOT_READY_MARKERS,
     BOOT_TIMEOUT_SECONDS,
     COMMAND_TIMEOUT_SECONDS,
+    FAILURE_MARKERS,
     REBOOT_COMMAND,
     UART_BAUDRATE,
     UART_TIMEOUT_SECONDS,
@@ -23,6 +24,7 @@ from drivers.protocol_constants import (
     WIFI_DISCONNECTED_STATE_MARKER,
     WIFI_PASSWORD_PROMPT,
     WIFI_SCAN_COMMAND,
+    WIFI_SHORT_PASSWORD_MARKER,
     WIFI_SSID_PROMPT,
     WIFI_DISCONNECT_COMMAND,
     WIFI_STATUS_COMMAND,
@@ -31,6 +33,20 @@ from drivers.protocol_constants import (
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[mK]")
 IP_ADDRESS_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 RSSI_RE = re.compile(r"(?:rssi|signal)\s*[:=]?\s*(-?\d+)", re.IGNORECASE)
+
+
+def _to_bool(value: Any) -> bool:
+    """Normalize JSON/text boolean values returned by firmware."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.casefold().strip() in {
+            "true",
+            "1",
+            "yes",
+            "connected",
+        }
+    return bool(value)
 
 
 class DeviceDriver:
@@ -266,14 +282,16 @@ class DeviceDriver:
         """Discard stale UART input before a cross-channel BLE action."""
         self._require_open().reset_input_buffer()
 
-    def wait_for_pattern(self, pattern: str, timeout: float = 10.0) -> bool:
-        """Consume UART lines until ``pattern`` appears or timeout expires."""
-        self.last_response = self.read_lines(
-            timeout=timeout,
-            end_pattern=pattern,
-        )
+    def wait_for_pattern(
+        self,
+        pattern: str | Sequence[str],
+        timeout: float = 10.0,
+    ) -> bool:
+        """Consume UART lines until any target marker appears or timeout expires."""
+        patterns = (pattern,) if isinstance(pattern, str) else tuple(pattern)
+        self.last_response = self._read_until_any(patterns, timeout)
         return any(
-            pattern.casefold() in line.casefold()
+            any(marker.casefold() in line.casefold() for marker in patterns)
             for line in self.last_response
         )
 
@@ -379,13 +397,17 @@ class DeviceDriver:
         # mode station_WiFi does not ask for a password; it starts the
         # connection attempt immediately after the empty line.
         if ssid == "":
-            transcript.extend(self.read_lines(
-                timeout=timeout,
-                end_pattern=WIFI_CONNECT_SUCCESS_MARKER,
-            ))
+            markers = (WIFI_CONNECT_SUCCESS_MARKER, *FAILURE_MARKERS, WIFI_SHORT_PASSWORD_MARKER)
+            transcript.extend(self._read_until_any(markers, timeout))
             self.last_response = transcript
             response = "\n".join(transcript).casefold()
-            return WIFI_CONNECT_SUCCESS_MARKER in response
+            return (
+                WIFI_CONNECT_SUCCESS_MARKER.casefold() in response
+                and not any(
+                    marker.casefold() in response
+                    for marker in (*FAILURE_MARKERS, WIFI_SHORT_PASSWORD_MARKER)
+                )
+            )
 
         second = self._read_until_any(
             (WIFI_PASSWORD_PROMPT,),
@@ -397,15 +419,17 @@ class DeviceDriver:
             return False
 
         self._write_line(password)
-        transcript.extend(
-            self.read_lines(
-                timeout=timeout,
-                end_pattern=WIFI_CONNECT_SUCCESS_MARKER,
-            )
-        )
+        markers = (WIFI_CONNECT_SUCCESS_MARKER, *FAILURE_MARKERS, WIFI_SHORT_PASSWORD_MARKER)
+        transcript.extend(self._read_until_any(markers, timeout))
         self.last_response = transcript
         response = "\n".join(transcript).casefold()
-        return WIFI_CONNECT_SUCCESS_MARKER in response
+        return (
+            WIFI_CONNECT_SUCCESS_MARKER.casefold() in response
+            and not any(
+                marker.casefold() in response
+                for marker in (*FAILURE_MARKERS, WIFI_SHORT_PASSWORD_MARKER)
+            )
+        )
 
     def wifi_status(self) -> dict[str, Any]:
         """Parse the text status format emitted by ``station_WiFi``."""
@@ -428,7 +452,11 @@ class DeviceDriver:
         if isinstance(parsed, dict):
             for key in result:
                 if key in parsed:
-                    result[key] = parsed[key]
+                    result[key] = (
+                        _to_bool(parsed[key])
+                        if key == "connected"
+                        else parsed[key]
+                    )
 
         # Support both status formats emitted by the firmware:
         # ``WiFi: connected`` and ``wifi station: disconnected``.

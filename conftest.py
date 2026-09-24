@@ -13,7 +13,7 @@ from drivers.device_driver import DeviceDriver
 
 @dataclass(frozen=True)
 class WifiConfig:
-    """Credentials and test values for the station_WiFi firmware."""
+    """Credentials and negative-test values for station_WiFi."""
 
     ssid: str
     password: str
@@ -23,35 +23,61 @@ class WifiConfig:
 
 
 def _required_env(name: str) -> str:
-    """Return a non-empty environment variable or fail with setup guidance."""
+    """Return a non-empty environment variable or fail with guidance."""
     value = os.getenv(name, "").strip()
     if not value:
         pytest.fail(
-            f"Missing {name}. Configure the test environment before "
-            "running hardware tests; do not hardcode credentials in tests."
+            f"Missing {name}. Configure the DZ-14 environment before running "
+            "hardware tests; do not hardcode credentials."
         )
     return value
 
 
 def _optional_int_env(name: str) -> int | None:
-    """Parse an optional decimal/hex integer environment variable."""
+    """Parse an optional decimal or 0x-prefixed integer environment value."""
     value = os.getenv(name, "").strip()
     if not value:
         return None
     try:
         return int(value, 0)
     except ValueError as exc:
-        pytest.fail(f"{name} must be a decimal or prefixed integer: {value!r}")
+        pytest.fail(f"{name} must be a decimal or 0x-prefixed integer: {value!r}")
         raise AssertionError from exc
+
+
+def _description_tokens() -> tuple[str, ...]:
+    """Read optional comma-separated USB description filters."""
+    return tuple(
+        token.strip()
+        for token in os.getenv("ESP32_DESCRIPTION_TOKENS", "").split(",")
+        if token.strip()
+    )
+
+
+def _open_uart_driver() -> DeviceDriver:
+    """Find and open the unique ESP32 UART selected by USB metadata."""
+    vid = _optional_int_env("ESP32_VID")
+    if vid is None:
+        pytest.fail("Missing ESP32_VID, for example ESP32_VID=0x403.")
+
+    driver = DeviceDriver(
+        DeviceDriver.find_port(
+            vid=vid,
+            pid=_optional_int_env("ESP32_PID"),
+            serial_number=os.getenv("ESP32_SERIAL") or None,
+            description_tokens=_description_tokens(),
+        )
+    )
+    driver.open()
+    return driver
 
 
 @pytest.fixture(scope="session")
 def wifi_config() -> WifiConfig:
-    """Load Wi-Fi credentials and negative-test data from environment variables."""
-    password = _required_env("WIFI_PASSWORD")
+    """Load Wi-Fi credentials and negative-test values from environment."""
     return WifiConfig(
         ssid=_required_env("WIFI_SSID"),
-        password=password,
+        password=_required_env("WIFI_PASSWORD"),
         wrong_password=os.getenv("WIFI_WRONG_PASSWORD", "wrong-password-14"),
         short_password=os.getenv("WIFI_SHORT_PASSWORD", "short"),
         nonexistent_ssid=os.getenv(
@@ -63,32 +89,8 @@ def wifi_config() -> WifiConfig:
 
 @pytest.fixture(scope="function")
 def device() -> Iterator[DeviceDriver]:
-    """Open the unique DUT selected by USB metadata and close it after the run.
-
-    ESP32_VID is required. ESP32_PID and ESP32_SERIAL are optional.
-    """
-    vid = _optional_int_env("ESP32_VID")
-    if vid is None:
-        pytest.fail(
-            "Missing ESP32_VID. Example: set ESP32_VID=0x303A in the shell."
-        )
-
-    driver = DeviceDriver(
-        DeviceDriver.find_port(
-            vid=vid,
-            pid=_optional_int_env("ESP32_PID"),
-            serial_number=os.getenv("ESP32_SERIAL") or None,
-            description_tokens=tuple(
-                token.strip()
-                for token in os.getenv("ESP32_DESCRIPTION_TOKENS", "").split(
-                    ","
-                )
-                if token.strip()
-            ),
-        )
-    )
-    driver.open()
-
+    """Provide an opened station_WiFi UART driver and always close it."""
+    driver = _open_uart_driver()
     try:
         yield driver
     finally:
@@ -102,25 +104,8 @@ def device() -> Iterator[DeviceDriver]:
 
 @pytest.fixture(scope="function")
 def ble_uart_device() -> Iterator[DeviceDriver]:
-    """Open the BLE firmware UART for the dual-channel smoke test."""
-    vid = _optional_int_env("ESP32_VID")
-    if vid is None:
-        pytest.fail("Missing ESP32_VID for the BLE UART fixture.")
-
-    driver = DeviceDriver(
-        DeviceDriver.find_port(
-            vid=vid,
-            pid=_optional_int_env("ESP32_PID"),
-            serial_number=os.getenv("ESP32_SERIAL") or None,
-            description_tokens=tuple(
-                token.strip()
-                for token in os.getenv("ESP32_DESCRIPTION_TOKENS", "").split(",")
-                if token.strip()
-            ),
-        )
-    )
-    driver.open()
-
+    """Provide an opened SENTRY-BLE UART driver and always close it."""
+    driver = _open_uart_driver()
     try:
         yield driver
     finally:
