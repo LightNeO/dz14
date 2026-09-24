@@ -1,0 +1,36 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest and coverage artifacts
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Test logs and generated reports
+*.log
+logs/
+reports/
+
+# Local UART/BLE evidence generated during runs
+uart_*.txt
+ble_*.txt
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

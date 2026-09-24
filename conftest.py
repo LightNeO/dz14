@@ -98,3 +98,30 @@ def device() -> Iterator[DeviceDriver]:
             pass
         finally:
             driver.close()
+
+
+@pytest.fixture(scope="function")
+def ble_uart_device() -> Iterator[DeviceDriver]:
+    """Open the BLE firmware UART for the dual-channel smoke test."""
+    vid = _optional_int_env("ESP32_VID")
+    if vid is None:
+        pytest.fail("Missing ESP32_VID for the BLE UART fixture.")
+
+    driver = DeviceDriver(
+        DeviceDriver.find_port(
+            vid=vid,
+            pid=_optional_int_env("ESP32_PID"),
+            serial_number=os.getenv("ESP32_SERIAL") or None,
+            description_tokens=tuple(
+                token.strip()
+                for token in os.getenv("ESP32_DESCRIPTION_TOKENS", "").split(",")
+                if token.strip()
+            ),
+        )
+    )
+    driver.open()
+
+    try:
+        yield driver
+    finally:
+        driver.close()

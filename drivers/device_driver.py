@@ -262,9 +262,20 @@ class DeviceDriver:
         )
         return self.last_response
 
+    def clear_input_buffer(self) -> None:
+        """Discard stale UART input before a cross-channel BLE action."""
+        self._require_open().reset_input_buffer()
+
     def wait_for_pattern(self, pattern: str, timeout: float = 10.0) -> bool:
         """Consume UART lines until ``pattern`` appears or timeout expires."""
-        return bool(self.read_lines(timeout=timeout, end_pattern=pattern))
+        self.last_response = self.read_lines(
+            timeout=timeout,
+            end_pattern=pattern,
+        )
+        return any(
+            pattern.casefold() in line.casefold()
+            for line in self.last_response
+        )
 
     def _read_until_any(
         self, patterns: Sequence[str], timeout: float
