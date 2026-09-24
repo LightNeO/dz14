@@ -1,4 +1,48 @@
-Звід по мануальному тесту прошивки Bluedroid_GATT_Server_merged.bin
+**Part A**
+Результат pytest -v -m wifi нижче
+```
+$ pytest -v -m wifi
+==================================================================== test session starts =====================================================================
+platform win32 -- Python 3.12.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\anton.yeryomin_qates\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: D:\QA\AI\Goose_main\emb\dz14
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 5 items / 2 deselected / 3 selected                                                                                                                 
+
+tests/wifi/test_wifi_positive.py::test_scan_finds_networks PASSED                                                                                       [ 33%]
+tests/wifi/test_wifi_positive.py::test_connect_success PASSED                                                                                           [ 66%]
+tests/wifi/test_wifi_positive.py::test_credentials_survive_reboot PASSED                                                                                [100%]
+
+======================================================== 3 passed, 2 deselected in 101.06s (0:01:41) =========================================================
+```
+
+Два тести деселектед: один це ble тест, інший це xfail баг на котрий описаний нижче
+
+BUG-001
+Команда "status" виводить результат "WiFi: connected" після відключення Wifi командою "disconnect"
+
+Прекондішнс:
+1. Дивайс з wifi прошивкою увімкнений
+2. Термінал з monitor mode відкритий і підключений
+
+Кроки для відтворення:
+1. Підключити wifi
+2. Відключитися від wifi командою "disconnect"
+3. ППеревірити статус - "status"
+4. Перевірити результат логів
+
+Актуальний результат:
+Команда "status" виводить результат "WiFi: connected" після відключення Wifi командою "disconnect"
+
+Очікуваний результат
+Команда "status" виводить результат "WiFi: disconnected" після відключення Wifi командою "disconnect"
+
+
+**Part B**
+Звіт по мануальному тесту прошивки Bluedroid_GATT_Server_merged.bin
 
 1. 
 Що робили
@@ -227,3 +271,43 @@ I (348457) GATTS_DEMO: Connection params update, status 0, conn_int 6, latency 0
 I (348527) GATTS_DEMO: Heart Rate updated to 60
 ```
 ![alt text](images/evod_9.png)
+
+BUG-002
+Назва характеристики "RELAY" у "Automation IO Service" відображається як "unknown Characteristic"
+
+Прекондішнс:
+1. Дивайс з BLE прошивкою SENTRY-BLE увімкнений і готовий до підключення
+2. nRF Connect for Mobile запущена
+Кроки для відтворення:
+1. Підключитися до SENTRY-BLE
+2. Тапнути на "Automation IO"
+3. Порівняти характеристити "Automation IO" з вимогами(FR-G3)
+
+Актуальний результат:
+Назва характеристики "RELAY" у "Automation IO Service" відображається як "unknown Characteristic"
+
+Очікуваний результат
+Назва характеристики "RELAY" у "Automation IO Service" відповідає мимогам(FR-G3)
+
+P.S. інші атрибути баг репорта упущені бо по завданню вимогою був саме "міні баг-репорт"
+
+
+
+Нижче представлений результат автотесту test_ble_smoke.py
+
+```
+$ pytest -v -m ble
+==================================================================== test session starts =====================================================================
+platform win32 -- Python 3.12.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\anton.yeryomin_qates\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: D:\QA\AI\Goose_main\emb\dz14
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 5 items / 4 deselected / 1 selected                                                                                                                 
+
+tests/ble/test_ble_smoke.py::test_ble_led_dual_channel PASSED                                                                                           [100%]
+
+============================================================== 1 passed, 4 deselected in 12.21s ==============================================================
+```

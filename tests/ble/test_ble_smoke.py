@@ -30,7 +30,6 @@ async def _find_ble_device():
 
 
 @pytest.mark.ble
-@pytest.mark.hw
 @pytest.mark.asyncio
 async def test_ble_led_dual_channel(ble_uart_device):
     """Write LED over BLE and verify both LED transitions over UART."""

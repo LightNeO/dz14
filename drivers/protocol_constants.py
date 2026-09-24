@@ -20,6 +20,7 @@ WIFI_SSID_PROMPT = "enter ssid, number from list, or enter to use saved"
 WIFI_PASSWORD_PROMPT = "enter password:"
 WIFI_CONNECT_SUCCESS_MARKER = "successfully connected to ssid:"
 WIFI_DISCONNECTED_STATE_MARKER = "wifi station: disconnected"
+WIFI_SHORT_PASSWORD_MARKER = "password too short (min 8 chars)"
 
 FAILURE_MARKERS = (
     "connection failed",
