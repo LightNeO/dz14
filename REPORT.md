@@ -1,10 +1,56 @@
+# Звіт ДЗ-14: Wi-Fi + BLE
+
+## Середовище
+
+| Параметр | Значення |
+|---|---|
+| Плата | ESP32-S3 DevKit |
+| USB-UART міст | FTDI FT232R (VID `0x0403`, PID `0x6001`) |
+| Прошивка, Частина A | `station_WiFi_merged.bin` (fw_4/git1) |
+| Прошивка, Частина B | `Bluedroid_GATT_Server_merged.bin` (fw_4/git1) |
+| ПК | Windows 11 Pro |
+| Python / пакети | Python 3.12.4, pytest 9.1.1, pytest-asyncio 1.4.0, pyserial, bleak 3.0.2 |
+| Wi-Fi мережа | хотспот зі смартфона, 2.4 GHz |
+| BLE-клієнт | nRF Connect for Mobile `<версія>` на `<модель телефона>` (Android) |
+| UART | 115200 8N1 |
+
+## Невелике уточнення до виконаного ДЗ
+
+На платі одночасно живе тільки одна прошивка, тому весь набір тестів за один `pytest -v` не пройде. Тести розділені маркерами і запускаються окремо під кожну прошивку:
+
+- `station_WiFi` → `pytest -v -m wifi`
+- `Bluedroid_GATT_Server` → `pytest -v -m ble`
+
+
+## Зведення результатів
+
+| Перевірка | Вимога PRD | Статус |
+|---|---|---|
+| test_scan_finds_networks | FR-W1 | PASS |
+| test_connect_success | FR-W2, FR-W5 | PASS |
+| test_disconnect | FR-W5, FR-W6 | XFAIL (BUG-001) |
+| test_credentials_survive_reboot | FR-W4 | PASS |
+| test_wrong_password | FR-W2 | PASS |
+| test_short_password | FR-W3 | PASS |
+| test_nonexistent_ssid | FR-W2, FR-C1 | PASS |
+| B1.1 Scan | FR-A1 | PASS |
+| B1.2 Connect + discovery | FR-A3, FR-G1, FR-G3 | див. BUG-002 |
+| B1.3 Heart Rate | FR-G1, FR-G2 | PASS |
+| B1.4 HR spike | FR-C3 | PASS |
+| B1.5 LED через BLE | FR-G4 | PASS |
+| B1.6 RELAY через BLE | FR-G4 | PASS |
+| B1.7 Read після write | FR-G5 | PASS |
+| B1.8 Конфлікт каналів | FR-G5 | PASS |
+| B1.9 Reconnect | FR-A2, FR-A3 | PASS |
+| test_ble_led_dual_channel | FR-G4 | PASS |
+
 # Частина A
 
 ## Прогін Wi-Fi-тестів
 
-Для запуску Wi-Fi-тестів використовується прошивка `station_WiFi`.
+Для запуску Wi-Fi-тестів використовувалась прошивка `station_WiFi`.
 
-Перед запуском тестів у Git Bash необхідно налаштувати змінні середовища:
+Перед запуском тестів потрібно задати змінні середовища. Варіант для Git Bash:
 
 ```bash
 export ESP32_VID=0x403
@@ -17,18 +63,9 @@ export WIFI_SHORT_PASSWORD="short"
 export WIFI_NONEXISTENT_SSID="__RANDOM_WRONG_SSID__"
 ```
 
-Призначення змінних:
+Обов'язкові лише `WIFI_SSID` і `WIFI_PASSWORD`. Решта змінних мають значення за замовчуванням.
 
-- `ESP32_VID` — VID USB-пристрою ESP32;
-- `ESP32_PID` — PID USB-пристрою, використовується для точнішого пошуку;
-- `ESP32_SERIAL` — серійний номер плати, якщо потрібно відрізнити її від інших пристроїв;
-- `WIFI_SSID` — SSID тестової Wi-Fi мережі;
-- `WIFI_PASSWORD` — правильний пароль тестової мережі;
-- `WIFI_WRONG_PASSWORD` — неправильний пароль для негативного тесту;
-- `WIFI_SHORT_PASSWORD` — короткий пароль для перевірки FR-W3;
-- `WIFI_NONEXISTENT_SSID` — SSID, якого не існує, для негативного тесту.
-
-Паролі та реальні credentials не зберігаються у репозиторії та не включаються до ZIP-архіву.
+Паролі та реальні credentials не зберігаються в репозиторії: вони задаються лише змінними середовища.
 
 Команда запуску:
 
@@ -39,6 +76,7 @@ pytest -v -m wifi
 Результат прогону:
 
 ```text
+$ pytest -v -m wifi
 ==================================================================== test session starts =====================================================================
 platform win32 -- Python 3.12.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\anton.yeryomin_qates\AppData\Local\Programs\Python\Python312\python.exe
 cachedir: .pytest_cache
@@ -46,26 +84,19 @@ rootdir: D:\QA\AI\Goose_main\emb\dz14
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.14.2, asyncio-1.4.0
-asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 8 items / 2 deselected / 6 selected
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items / 1 deselected / 7 selected                                                                                                                 
 
-tests/wifi/test_wifi_negative.py::test_wrong_password PASSED
-[ 16%]
-tests/wifi/test_wifi_negative.py::test_short_password PASSED
-[ 33%]
-tests/wifi/test_wifi_negative.py::test_nonexistent_ssid PASSED
-[ 50%]
-tests/wifi/test_wifi_positive.py::test_scan_finds_networks PASSED
-[ 66%]
-tests/wifi/test_wifi_positive.py::test_connect_success PASSED
-[ 83%]
-tests/wifi/test_wifi_positive.py::test_credentials_survive_reboot PASSED
-[100%]
+tests/wifi/test_wifi_negative.py::test_wrong_password PASSED                                                                                            [ 14%]
+tests/wifi/test_wifi_negative.py::test_short_password PASSED                                                                                            [ 28%]
+tests/wifi/test_wifi_negative.py::test_nonexistent_ssid PASSED                                                                                          [ 42%]
+tests/wifi/test_wifi_positive.py::test_scan_finds_networks PASSED                                                                                       [ 57%]
+tests/wifi/test_wifi_positive.py::test_connect_success PASSED                                                                                           [ 71%]
+tests/wifi/test_wifi_positive.py::test_disconnect XFAIL (BUG-001: after disconnect, status reports WiFi: connected with empty SSID and IP 0.0.0.0)      [ 85%]
+tests/wifi/test_wifi_positive.py::test_credentials_survive_reboot PASSED                                                                                [100%]
 
-======================================================== 6 passed, 2 deselected in 184.24s (0:03:04) =========================================================
+=================================================== 6 passed, 1 deselected, 1 xfailed in 221.37s (0:03:41) ===================================================
 ```
-
-> Примітка: `test_disconnect` позначений як очікувано невдалий через BUG-001. Перед фінальною здачею потрібно повторити прогін після останніх змін і замінити цей блок на актуальний результат.
 
 ---
 
@@ -74,6 +105,14 @@ tests/wifi/test_wifi_positive.py::test_credentials_survive_reboot PASSED
 ### Опис
 
 Команда `status` після виконання `disconnect` повертає некоректний стан Wi-Fi.
+
+| Поле | Значення |
+|---|---|
+| Порушена вимога | **FR-W5** (якщо не підключено — повідомлення, що не підключено) |
+| Severity | Major: стан, про який звітує пристрій, суперечить фактичному |
+| Priority | High |
+| Environment | ESP32-S3 DevKit, `station_WiFi_merged.bin`, UART 115200 8N1 |
+| Автотест | `tests/wifi/test_wifi_positive.py::test_disconnect` → XFAIL |
 
 ### Передумови
 
@@ -128,6 +167,14 @@ WiFi: disconnected
 
 SSID повинен бути порожнім або відсутнім, IP — неактивним, а RSSI — таким, що не свідчить про активне підключення.
 
+### Доказ
+
+Рядок із прогону pytest:
+
+```text
+tests/wifi/test_wifi_positive.py::test_disconnect XFAIL (BUG-001: after disconnect, status reports WiFi: connected with empty SSID and IP 0.0.0.0)
+```
+Фрагмент UART-логу відсутній через вимогу по ДЗ "міні багрепорт". Він ітак вийшов детальний.
 ---
 
 # Частина B
@@ -319,7 +366,7 @@ W (2546527) GATTS_DEMO: Heart Rate SPIKE injected: 198
 
 ### Фактичний результат
 
-LED коректно реагує на BLE-команди.
+LED коректно реагує на BLE-команди: загоряється коли write `01`, і вимикається коли write `00`
 
 ### UART-доказ
 
@@ -363,7 +410,8 @@ RELAY OFF!
 
 ### Фактичний результат
 
-Команди виконуються, у UART зафіксовані повідомлення:
+Команди виконуються, при `01` чутно характерне клацання, при `00` також чутне клацання трохи інакшого звучання.
+У UART зафіксовані повідомлення:
 
 ```text
 I (4454137) GATTS_DEMO: Characteristic write, value len 1, value
@@ -403,6 +451,43 @@ I (4466107) GATTS_DEMO: RELAY OFF!
 ![Read after write — LED](images/evid_7_1.png)
 
 ![Read after write — RELAY](images/evid_7_2.png)
+
+UART-лог, LED ON/OFF:
+
+```text
+I (715397) GATTS_DEMO: Characteristic write, value len 1, value
+I (715397) GATTS_DEMO: 01
+I (715397) GATTS_DEMO: LED ON!
+I (715527) GATTS_DEMO: Heart Rate updated to 65
+I (715527) GATTS_DEMO: Attribute value set, status 0
+I (716527) GATTS_DEMO: Heart Rate updated to 66
+I (716527) GATTS_DEMO: Attribute value set, status 0
+I (717527) GATTS_DEMO: Heart Rate updated to 65
+I (717527) GATTS_DEMO: Attribute value set, status 0
+I (718527) GATTS_DEMO: Heart Rate updated to 80
+I (718527) GATTS_DEMO: Attribute value set, status 0
+I (719527) GATTS_DEMO: Heart Rate updated to 67
+I (719527) GATTS_DEMO: Attribute value set, status 0
+I (719837) GATTS_DEMO: Characteristic write, value len 1, value
+I (719837) GATTS_DEMO: 00
+I (719837) GATTS_DEMO: LED OFF!
+```
+UART-лог, RELAY ON/OFF:
+
+```text
+I (872837) GATTS_DEMO: Characteristic write, value len 1, value
+I (872837) GATTS_DEMO: 01
+I (872837) GATTS_DEMO: RELAY ON!
+I (873527) GATTS_DEMO: Heart Rate updated to 61
+I (873527) GATTS_DEMO: Attribute value set, status 0
+I (874527) GATTS_DEMO: Heart Rate updated to 69
+I (874527) GATTS_DEMO: Attribute value set, status 0
+I (875527) GATTS_DEMO: Heart Rate updated to 75
+I (875527) GATTS_DEMO: Attribute value set, status 0
+I (876497) GATTS_DEMO: Characteristic write, value len 1, value
+I (876497) GATTS_DEMO: 00
+I (876497) GATTS_DEMO: RELAY OFF!
+```
 
 **Статус: PASS**
 
@@ -493,7 +578,7 @@ I (348237) GATTS_DEMO: Connection params update, status 0, conn_int 24, latency 
 I (348457) GATTS_DEMO: Connection params update, status 0, conn_int 6, latency 0, timeout 500
 ```
 
-![Reconnect](images/evod_9.png)
+![Reconnect](images/evid_9.png)
 
 **Статус: PASS**
 
@@ -504,6 +589,13 @@ I (348457) GATTS_DEMO: Connection params update, status 0, conn_int 6, latency 0
 ### Опис
 
 RELAY characteristic у сервісі Automation IO відображається як `unknown Characteristic` у nRF Connect.
+
+| Поле | Значення |
+|---|---|
+| Порушена вимога | FR-G3 |
+| Severity | Trivial: функціональність не порушена, read/write працюють |
+| Priority | Low |
+| Environment | ESP32-S3 DevKit, `Bluedroid_GATT_Server_merged.bin`, nRF Connect for Mobile `<версія>`, `<модель телефона>` |
 
 ### Передумови
 
@@ -584,6 +676,7 @@ pytest -v -m ble
 Результат:
 
 ```text
+$ pytest -v -m ble
 ==================================================================== test session starts =====================================================================
 platform win32 -- Python 3.12.4, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\anton.yeryomin_qates\AppData\Local\Programs\Python\Python312\python.exe
 cachedir: .pytest_cache
@@ -591,14 +684,12 @@ rootdir: D:\QA\AI\Goose_main\emb\dz14
 configfile: pytest.ini
 testpaths: tests
 plugins: anyio-4.14.2, asyncio-1.4.0
-asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 8 items / 4 deselected / 1 selected
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items / 7 deselected / 1 selected                                                                                                                 
 
-tests/ble/test_ble_smoke.py::test_ble_led_dual_channel PASSED [100%]
+tests/ble/test_ble_smoke.py::test_ble_led_dual_channel PASSED                                                                                           [100%]
 
-============================================================== 1 passed, 4 deselected in 12.21s ============================================================== 
+============================================================== 1 passed, 7 deselected in 12.42s ==============================================================
 ```
 
 **Статус: PASS**
-
-> Примітка: наведений output BLE збережено з фактичного прогону до останніх технічних змін у конфігурації тестів. Перед архівацією бажано повторити `pytest -v -m ble` і замінити блок на актуальний.
